@@ -1,0 +1,44 @@
+# Recommended default for the paper.
+#
+# Every policy family carries the same four nuisance signals (popularity, affect,
+# recency, velocity) at moderate weight, and differs only in the magnitude of its
+# characteristic term. Consequences:
+#   * "which signal is present" stops being diagnostic; only weighting is
+#   * mechanism classification becomes a genuine estimation problem
+#   * O1/O2/O5 become partially confounded, which is the identifiability finding
+#     the paper predicts (04_EVALUATION.md, E5) rather than an artefact
+#   * active probe design has something to win, because resolving a magnitude
+#     needs contrastive matched cohorts, not more random browsing
+#
+# Defensible in writing: real rankers do use all of these signals at once.
+_include: [base]
+
+run:
+  out_dir: outputs/step1_realistic
+
+platform:
+  slate_size: 8
+  candidate_pool: 100
+  noise_scale: 0.70
+
+oracles:
+  active: [O1, O2, O3, O4, O5, O6]
+  # nuis_* are the SHARED background weights; identical across families on purpose
+  O1: {gamma: 0.85, latent_dim: 16, kappa: 0.20,
+       nuis_pop: 0.00, nuis_aro: 0.30, nuis_rec: 0.30, nuis_vel: 0.30}
+  O2: {alpha: 0.85, arousal_gain: 1.2, kappa: 0.20,
+       nuis_pop: 0.30, nuis_aro: 0.00, nuis_rec: 0.30, nuis_vel: 0.30}
+  O3: {epsilon: 0.25, decay: 50.0, kappa: 0.20,
+       nuis_pop: 0.30, nuis_aro: 0.30, nuis_rec: 0.30, nuis_vel: 0.30}
+  O4: {kappa: 0.55, lambda_d: 0.55,
+       nuis_pop: 0.30, nuis_aro: 0.30, nuis_rec: 0.30, nuis_vel: 0.30}
+  O5: {half_life: 14.0, velocity_weight: 0.85, kappa: 0.20,
+       nuis_pop: 0.30, nuis_aro: 0.30, nuis_rec: 0.00, nuis_vel: 0.00}
+  O6: {switch_round: 25, weights_a: [0.5, 0.3, 0.0, 0.0, 0.2],
+       weights_b: [0.2, 0.4, 0.1, 0.1, 0.2], kappa: 0.30,
+       nuis_pop: 0.30, nuis_aro: 0.30, nuis_rec: 0.30, nuis_vel: 0.30}
+
+separability:
+  n_agents: 24
+  n_rounds: 30
+  n_replicates: 6

@@ -1,0 +1,59 @@
+# ARIS base configuration (Step 1: foundation).
+# Every number in the paper must be regenerable from a config + seed.
+
+run:
+  seed: 20260803
+  out_dir: outputs/step1
+  n_seeds: 3
+
+corpus:
+  n_items: 2000
+  n_topics: 12
+  embed_dim: 24
+  # Decorrelation target: |corr| between popularity / arousal / recency / velocity
+  # must fall below this in the reported correlation matrix (04_EVALUATION.md 4.1).
+  max_abs_corr: 0.10
+  decorrelation_max_iters: 200
+
+platform:
+  slate_size: 10              # K
+  candidate_pool: 60          # P: sampled per request, NEVER revealed (see docs/DEVIATIONS.md D1)
+  noise_scale: 0.35           # Gumbel scale on scores -> stochastic slates
+  reveal_pool: false          # keep false; true only for the -HiddenPool ablation
+  state_dim: 24               # must equal corpus.embed_dim
+
+oracles:
+  active: [O1, O2, O3, O4, O5, O6]
+  O1: {gamma: 0.9,  latent_dim: 24, kappa: 0.25}
+  O2: {alpha: 1.1,  arousal_gain: 1.4, kappa: 0.25}
+  O3: {epsilon: 0.30, decay: 40.0, kappa: 0.25}
+  O4: {kappa: 0.75, lambda_d: 0.9}
+  O5: {half_life: 12.0, velocity_weight: 1.2, kappa: 0.25}
+  O6: {switch_round: 25, weights_a: [0.6, 0.2, 0.0, 0.0, 0.2], weights_b: [0.1, 0.5, 0.1, 0.0, 0.3], kappa: 0.4}
+
+# Step-1 diagnostic: how separable are the oracles under *random* probing?
+# This is a proto-E5 identifiability check. If pairs are already ~1.0 separable
+# with random probes, the task is too easy (see README of the earlier scaffold).
+separability:
+  n_agents: 24
+  n_rounds: 30
+  n_replicates: 6
+
+llm:
+  backend: ollama             # ollama | stub
+  host: http://localhost:11434
+  population_model: qwen2.5:3b-instruct
+  investigator_model: qwen2.5:7b-instruct
+  fallback_model: llama3.2:3b
+  temperature: 0.7
+  seed: 20260803
+  num_predict: 160
+  num_ctx: 2048
+  timeout_s: 180
+  cache_dir: .llm_cache       # persistent; makes reruns free and deterministic
+  bench:
+    n_calls: 5
+    prompt_tokens_target: 400
+
+ledger:
+  path: outputs/step1/ledger.duckdb

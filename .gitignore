@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.llm_cache/
+outputs/
+*.duckdb
+.venv/
+.pytest_cache/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Packaging
+*.egg-info/
+build/
+dist/

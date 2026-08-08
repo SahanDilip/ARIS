@@ -1,0 +1,31 @@
+# Hardened testbed. Use this if base.yaml lands in the "too easy" band
+# (Step-1 report section 4 shows most pairs > 0.95 under random probing).
+#
+# Three levers, in the order you should pull them:
+#   1. weaker mechanism parameters  -> effects are subtle, not cartoonish
+#   2. higher observation noise      -> measurement noise gives the identifiability
+#                                        analysis something to be about
+#   3. shorter slates                -> less information per query (E6 condition)
+_include: [base]
+
+run:
+  out_dir: outputs/step1_hard
+
+platform:
+  slate_size: 5
+  candidate_pool: 120
+  noise_scale: 0.90
+
+oracles:
+  active: [O1, O2, O3, O4, O5, O6]
+  O1: {gamma: 0.35, latent_dim: 12, kappa: 0.20}
+  O2: {alpha: 0.40, arousal_gain: 1.0, kappa: 0.20}
+  O3: {epsilon: 0.12, decay: 60.0, kappa: 0.20}
+  O4: {kappa: 0.45, lambda_d: 0.35}
+  O5: {half_life: 20.0, velocity_weight: 0.40, kappa: 0.20}
+  O6: {switch_round: 25, weights_a: [0.5, 0.3, 0.0, 0.0, 0.2], weights_b: [0.2, 0.4, 0.1, 0.1, 0.2], kappa: 0.30}
+
+separability:
+  n_agents: 24
+  n_rounds: 30
+  n_replicates: 6
