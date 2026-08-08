@@ -210,3 +210,52 @@ exercised in the reported run. This is equivalent to running the paper's own
 > population-tier results use the Level-0 policy only; the hybrid escalation
 > mechanism (Eq. 11) was validated for correctness but not exercised at scale.
 > This is structurally equivalent to the -LLM(population) ablation condition."
+
+## D11 — Ranking surrogate HitRatio@1: two real bugs found and fixed
+
+Initial HitRatio@1 results (1-positive/19-negative protocol matching Cai et al.
+[5]) were stuck near or below the random baseline regardless of oracle family,
+and an oracle-informed "ceiling" using each persona's TRUE interest_vec
+(B7-style upper bound, 04_EVALUATION.md 4.2) scored IDENTICALLY to a weak,
+realistic session-based proxy -- perfect ground-truth knowledge should not
+match a weak guess, which was the signal that something was structurally wrong
+rather than the task simply being hard.
+
+Two real bugs, found by direct inspection rather than parameter tuning:
+
+1. **Null-anchor scoring.** `RankingSurrogate.score()` originally compared each
+   real item against a synthetic all-zero "null" feature vector that never
+   appears during training. Gradient-boosted trees extrapolate unreliably to
+   points far outside their training distribution, which made the resulting
+   ranking signal too weak to be useful. Fixed by replacing null-anchor scoring
+   with a vectorised round-robin (Copeland-style) tournament: every comparison
+   is between two actual candidates, exactly matching what the classifier was
+   trained on.
+
+2. **The exact `id(r)` lookup bug from D8, recurring in a second location.**
+   `_pairwise_examples` (the TRAINING data builder) still used `row_pref.get(id(r))`
+   even after the same bug was fixed in `evaluate_fidelity`. Since `id()` almost
+   never matched the `(persona_id, round)`-keyed trace dictionary, the
+   preference-match feature (`rel_diff`) was always exactly zero (std=0.0,
+   confirmed directly) during training -- the classifier never had a chance to
+   learn from persona-conditioned relevance at all, regardless of what was
+   supplied at evaluation time. This explains the ceiling/realistic parity
+   completely on its own. Fixed by using the same `(persona_id, round)` key
+   everywhere.
+
+After both fixes: on O1 (no diversity confound), held-out HR@1=0.097 (vs random
+0.05), ceiling HR@1=0.194, headroom=0.097 -- a coherent, interpretable pattern.
+On O4 (strong MMR diversity reranking, lambda_d=0.9), the realistic proxy drops
+to HR@1=0.011 while the ceiling still clears baseline at 0.074 -- a genuinely
+informative, oracle-specific finding: O4's diversity mechanism makes passive
+recovery harder even with a strong content proxy, consistent with Step 1's own
+diagnostic flagging O4 as the hardest family to resolve (parameter_resolution.csv).
+
+> Paper: no caveat needed here -- this is the intended headline surrogate
+> result. "The ranking surrogate's fidelity depends materially on the target
+> oracle's mechanism: on O1, held-out HitRatio@1 exceeds the random baseline by
+> ~2x (0.097 vs 0.05); on O4, whose strong diversity-reranking penalty
+> decorrelates relevance from what is served, the same content-only proxy
+> falls below baseline while an oracle-informed ceiling using ground-truth
+> preference still clears it (0.074), quantifying the value of persona-level
+> information the investigator does not have."
