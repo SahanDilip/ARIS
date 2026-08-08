@@ -259,3 +259,76 @@ diagnostic flagging O4 as the hardest family to resolve (parameter_resolution.cs
 > falls below baseline while an oracle-informed ceiling using ground-truth
 > preference still clears it (0.074), quantifying the value of persona-level
 > information the investigator does not have."
+
+## D12 — Probe Designer implements Eq. 12's disagreement term only
+
+Algorithm 2 / Eq. 12 in `02_METHODOLOGY.tex` scores candidate probe conditions
+as `disagreement - cost - implausibility`. The Step 4 implementation
+(`aris/investigator/probe_designer.py`) implements the disagreement term only;
+`cost` is a placeholder linear-in-cohort-size penalty that defaults to zero
+weight, and `implausibility` is not scored at all (Step 2's population-level
+plausibility discriminator is the project's only plausibility check, and it is
+not wired into probe selection). This is a scope cut made under the study's
+7-day timeline, not an oversight -- the disagreement term is the piece RQ2
+actually depends on, and cost/implausibility weighting can be added later
+without re-deriving the design.
+
+> Paper: "Our implementation scores candidate probes by predicted disagreement
+> alone; the full cost- and plausibility-weighted objective (Eq. 12) is left
+> for future work, and we note this as a simplification rather than claim the
+> complete objective was evaluated."
+
+---
+
+## D13 — Gate 2 (active beats random) not reliably demonstrated; diagnosed, not just observed
+
+`04_EVALUATION.md` names the active-vs-random comparison as one of three things
+never to de-scope. It was implemented, run, and diagnosed thoroughly; the
+result is a genuine, mixed finding rather than a clean pass.
+
+**What was tested.** Active cohort selection (choosing which persona interest-
+vector seed to probe next, via pilot-simulated disagreement between two
+parameter hypotheses under Eq. 12's disagreement term -- see D12) against
+random cohort selection, at matched query budget, across three parameters
+spanning Step 1's own difficulty spectrum:
+
+| Parameter | Regime | Result |
+|---|---|---|
+| O2.alpha | too easy (Step 1: saturates immediately) | both methods hit the permutation-test floor (p=0.005) instantly -- no headroom to compare methods at all |
+| O6.switch_round | too hard (Step 1: needs ~720-query budget) | both methods stuck near p=1.0 at the budgets tested -- neither makes progress |
+| O4.lambda_d | the "goldilocks" zone -- the only regime where a real comparison is possible | active shows a small, inconsistent advantage (won on 3/5 seeds at one budget, 2/3 at a larger one) that does not reliably clear noise: mean final p-value across 5 seeds was 0.642 (random) vs 0.676 (active) -- statistically indistinguishable |
+
+**Diagnosis performed before accepting this as a finding** (per the "diagnose
+before proceeding" instruction): confirmed pilot-disagreement scores have real,
+non-degenerate variance across candidate cohorts (CV=0.31 over 15 draws, not
+noise-flat); confirmed that re-weighting the disagreement score toward the
+statistic most mechanistically linked to lambda_d (`intra_slate_sim`, since it
+is a diversity-reranking penalty) did not change the outcome (mean p 0.773 ->
+0.764, negligible); tested a directly persona-sensitive parameter (O2.alpha)
+as a sanity check that the framework CAN detect an effect when one exists
+(inconclusive here only because O2 saturates too fast to show any comparison
+at all, not because the framework is broken).
+
+**Interpretation.** Persona-cohort IDENTITY appears to be a weak active-design
+lever specifically for `lambda_d`, because MMR diversity reranking operates on
+item-level competition within the candidate pool -- a mechanism that is largely
+independent of which persona is browsing. This is a plausible, defensible
+methodological insight, not a bug: not every mechanism should be expected to
+respond to the same active-design lever, and identifying which levers work for
+which mechanism classes is itself a reportable contribution. A stronger lever
+for item-level mechanisms would likely need to vary WHICH ITEMS enter matched-
+cohort probes (a form of content-conditioned probing the original design
+anticipates, O2/O5 in 00_RESEARCH_DIRECTION.md's terms) rather than WHICH
+PERSONA. This was not implemented within the study's timeline.
+
+> Paper: do not claim RQ2 is confirmed. Report honestly: "active cohort
+> selection based on predicted disagreement did not reliably outperform random
+> selection for the diversity-reranking parameter tested, across budgets where
+> a comparison was possible at all; we diagnosed this as a mismatch between the
+> active-design lever (persona identity) and the mechanism under test (item-
+> level reranking), rather than a failure of active design in general, and
+> identify content-conditioned probe selection as the natural next lever to
+> test." This is a legitimate, citable negative result (00_RESEARCH_DIRECTION.md
+> Defence 2 explicitly frames negative/limiting results as findings), and is
+> more defensible than an overclaimed "active beats random" that would not
+> survive a careful reviewer re-running the comparison.
