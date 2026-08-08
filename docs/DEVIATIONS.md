@@ -131,3 +131,82 @@ on different hardware or a different Ollama build can produce different tokens.
 
 Ship the `.llm_cache/` directory with the artefact if size permits. It makes the
 artefact exactly reproducible, which reviewers notice.
+
+
+## D8 — A real reproducibility bug, found and fixed during Step 2
+
+`platform/env.py`'s `session()` originally derived its cold-start RNG seed via
+`abs(hash(sid)) % (2**32)`, where `sid` is a string. Python's built-in `hash()`
+on strings is **randomized per process** since Python 3.3 (`PYTHONHASHSEED`)
+unless explicitly disabled. This silently broke reproducibility across separate
+runs with an identical config and seed: the platform's cold-start randomness --
+and therefore every downstream observation -- differed run to run, while every
+*other* seed in the codebase was correctly fixed. It was caught by the same seed
+producing different held-out AUCs and exclusion counts across three consecutive
+runs of `step2_report.py`. Fixed by deriving the seed from a direct integer mix
+of `persona_id` and `seed` instead of hashing a string. `tests/test_population.py
+::test_browse_population_is_deterministic` now guards this regression directly.
+
+> Paper: nothing to disclose here -- this is exactly the kind of bug the
+> reproducibility infrastructure (fixed seeds, the ledger, the barrier test) is
+> supposed to catch, and it did. Worth a sentence in the methodology section on
+> why determinism was verified by rerunning rather than assumed from seeding
+> alone: "we verified exact reproducibility empirically (identical trajectories
+> across repeated runs at a fixed seed) rather than relying on seed-setting
+> alone, which surfaced and let us fix a process-level randomization bug."
+
+---
+
+## D9 — Plausibility discriminator remains off-manifold (AUC≈1.0) after calibration
+
+The plausibility reference model (`population/plausibility.py`) was calibrated
+against the actual population's trajectory statistics in four real respects:
+matched session length (was previously a perfectly-separating giveaway feature),
+a corrected cumulative session clock (the original multiplied round index by a
+freshly-redrawn factor each round, which is not a clock), matched dwell-time
+scale, and a two-stage retrieval-then-rank candidate process with Gumbel noise
+matching the real platform's Plackett-Luce sampling. After these fixes, seven
+of eight trajectory features show substantial marginal overlap between agent
+and reference distributions; the discriminator nonetheless still reports
+AUC≈1.0 on the O4 population at n=60/class with 8 features.
+
+This was not chased further within the Step-2 time budget. Two candidate
+explanations, either or both may be true: (a) genuine multivariate separability
+at this sample size even with overlapping marginals (a linear classifier can
+separate two 60-point clouds in 8 dimensions on a combination of features even
+when no single feature does), or (b) a residual, real behavioural difference
+not yet identified. This check is a WARN, not a gating criterion, so it did not
+block Gate 1. Revisit before relying on plausibility AUC as an RQ3/RQ4 metric
+in Step 4 -- either diagnose further with a larger reference sample and a
+regularised classifier, or substitute a genuine public dataset (MovieLens
+session logs) once time permits.
+
+> Paper: report this honestly if RQ3/RQ4 depend on plausibility AUC as
+> constructed here: "the plausibility discriminator, calibrated against a
+> structured synthetic reference process, reports agent trajectories as
+> distinguishable from the reference at the population scale tested; we did
+> not have time within the study's timeline to determine whether this reflects
+> a genuine behavioural gap or a synthetic-reference calibration limit, and we
+> flag it as a limitation rather than a validated plausibility guarantee."
+
+
+## D10 — Level-1 LLM path validated structurally, not used in reported results
+
+Ollama's HTTP API responded in 1-3s under direct manual testing (`ollama run`,
+and raw API calls via PowerShell), but the same calls issued from the Step-2
+driver script intermittently stalled past a 180s timeout on first invocation
+after model idle-unload, most likely due to Windows Defender real-time
+scanning of the model weights file on reload. This was not resolved within
+the study's timeline.
+
+Consequence: reported Step 2 results use Level-0 only (the shared softmax
+policy, beta-driven), with Level-1 escalation validated structurally only
+(schema parsing, fallback behaviour, cache correctness -- see
+tests/test_population.py::test_escalation_uses_llm_when_provided) rather than
+exercised in the reported run. This is equivalent to running the paper's own
+"-LLM(population)" ablation (B4, 04_EVALUATION.md) as the primary condition.
+
+> Paper: "Due to local LLM serving latency on the target hardware, reported
+> population-tier results use the Level-0 policy only; the hybrid escalation
+> mechanism (Eq. 11) was validated for correctness but not exercised at scale.
+> This is structurally equivalent to the -LLM(population) ablation condition."

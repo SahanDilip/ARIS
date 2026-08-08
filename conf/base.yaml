@@ -39,6 +39,30 @@ separability:
   n_rounds: 30
   n_replicates: 6
 
+# Sized to the measured benchmark on this laptop (i5-1135G7, 16GB RAM, CPU-bound):
+# qwen2.5:3b-instruct @ 8.037 s/call median. At escalation_target_rate 0.05 this
+# is 60*40*0.05 = 120 L1 calls ~= 16 minutes per probe batch -- the "feasible"
+# cell in the Step-1 bench grid. Raise n_personas/rounds only after confirming
+# wall-clock on your own machine; this is a budget, not a target.
+population:
+  n_personas: 60
+  rounds: 40
+  seed: 20260803
+  policy:
+    eta: 1.3                    # escalation entropy threshold, Eq. 11
+    novelty_escalate: 0.85
+    reflect_every: 8
+    distill_every: 5
+    distill_lr: 0.15
+    distill_l2: 0.05
+  validation:
+    position_bias_alpha: 0.05    # Wilcoxon significance level
+    min_affect_gap: 0.02
+    held_out_bootstrap_alpha: 0.05   # significance level for AUC > 0.5 test
+  plausibility:
+    n_rounds: 20                # shorter than the full run -- AUC estimate only
+    slate_size: 8
+
 llm:
   backend: ollama             # ollama | stub
   host: http://localhost:11434

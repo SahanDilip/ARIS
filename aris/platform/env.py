@@ -69,7 +69,16 @@ class BlackBoxPlatform:
     def session(self, persona_id: int, seed: int, interest: np.ndarray | None = None) -> str:
         """Open a session. `interest` seeds the platform's cold-start guess only."""
         sid = f"s{persona_id}-{seed}"
-        rng = np.random.default_rng(abs(hash(sid)) % (2**32))
+        # Deterministic seed derivation. An earlier version used
+        # `abs(hash(sid)) % (2**32)`, but Python's built-in hash() on strings is
+        # RANDOMIZED PER PROCESS since Python 3.3 (PYTHONHASHSEED) unless
+        # explicitly disabled. That silently broke reproducibility across
+        # separate runs with the same seed -- the platform's cold-start
+        # randomness (and therefore every downstream observation) differed
+        # run to run even though every other seed in the codebase was fixed.
+        # A direct integer mix has no such hidden randomization.
+        seed_val = (int(persona_id) * 1_000_003 + int(seed) * 7_919 + 104_729) % (2**32)
+        rng = np.random.default_rng(seed_val)
         if interest is None:
             v = rng.standard_normal(self.dim)
         else:
